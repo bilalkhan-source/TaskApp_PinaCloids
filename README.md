@@ -94,8 +94,12 @@ Open `.github/workflows/deploy.yml` — it has TODO placeholders. Complete all o
 
 You must also set up these **GitHub Repository Secrets** (Settings → Secrets and variables → Actions):
 - `DOCKER_USERNAME` — your Docker Hub username
-- `DOCKER_PASSWORD` — your Docker Hub access token
+- `DOCKER_PASSWORD` — your Docker Hub access token (create a PAT in Docker Hub; never commit it)
 - `RAILWAY_TOKEN` — your Railway API token (Dashboard → Account Settings → Tokens → Create Token)
+- `RAILWAY_PROJECT_ID` — your Railway project UUID (Project → Settings, or from the project URL)
+- `RAILWAY_SERVICE_ID_BACKEND` — backend service ID (service → Settings → Service ID)
+- `RAILWAY_SERVICE_ID_FRONTEND` — frontend service ID (service → Settings → Service ID)
+- `RAILWAY_BACKEND_API_URL` — browser-facing backend base URL, e.g. `https://your-backend.up.railway.app/api` (set this after the backend service has a public URL, then push again so the frontend image is built with the correct API URL)
 
 **How to get your Railway Token:**
 1. Go to https://railway.app → click your profile (bottom left) → Account Settings
@@ -107,12 +111,11 @@ You must also set up these **GitHub Repository Secrets** (Settings → Secrets a
 1. Create a **Railway account** at https://railway.app (sign up with GitHub — no card required)
 2. Create a **New Project** → **Empty Project**
 3. Inside the project, create **two services**:
-   - **Backend service**: Click "+ New" → "Docker Image" → enter `<dockerhub-username>/taskmanager-backend:latest`. Under Settings → Networking → generate a public domain. Set the port variable to `8000`.
-   - **Frontend service**: Click "+ New" → "Docker Image" → enter `<dockerhub-username>/taskmanager-frontend:latest`. Under Settings → Networking → generate a public domain. Set the port variable to `80`.
+   - **Backend service**: Click "+ New" → "Docker Image" → enter `<dockerhub-username>/taskmanager-backend:latest`. Under Settings → Networking → generate a public domain. Set the port variable to `8000`. Copy **Settings → Service ID** into the `RAILWAY_SERVICE_ID_BACKEND` GitHub secret.
+   - **Frontend service**: Click "+ New" → "Docker Image" → enter `<dockerhub-username>/taskmanager-frontend:latest`. Under Settings → Networking → generate a public domain. Set the port variable to `80`. Copy **Service ID** into `RAILWAY_SERVICE_ID_FRONTEND`.
 4. After both services are deployed and have public URLs:
-   - You need to update the frontend so it knows where the backend API is. Two approaches:
-     - **Option A (recommended):** Update `nginx.conf` to proxy `/api/` to your Railway backend URL instead of `http://backend:8000`, rebuild and push the frontend image.
-     - **Option B:** Rebuild the frontend with the build arg: `docker build --build-arg REACT_APP_API_URL=https://<your-backend>.up.railway.app/api -t <username>/taskmanager-frontend:latest ./frontend`
+   - The frontend must call the backend from the browser. **Option A:** Update `nginx.conf` to proxy `/api/` to your Railway backend URL instead of `http://backend:8000`, then rebuild and push the frontend image.
+   - **Option B (used by this repo’s GitHub Actions):** Set the `RAILWAY_BACKEND_API_URL` secret to your backend’s public API base (for example `https://<your-backend>.up.railway.app/api`). The workflow passes it as `REACT_APP_API_URL` when building the frontend image. After the backend URL exists, add the secret and push to `main` again so a new frontend image is built.
 5. Push a commit to `main` and verify the full pipeline:
    - GitHub Actions: ✅ tests pass → ✅ images built and pushed → ✅ Railway redeploy triggered
    - The live app is accessible via your Railway frontend URL and full CRUD works

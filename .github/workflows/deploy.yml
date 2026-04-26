@@ -3,19 +3,16 @@
 # GitHub Actions Workflow: Build, Test, and Deploy to Railway
 # ============================================================================
 #
-# YOUR TASK:
-# This workflow file is INCOMPLETE. You need to fill in the missing steps
-# marked with TODO comments. The pipeline should:
-#
-#   1. Run backend tests (.NET Core)
-#   2. Build Docker images for backend and frontend
-#   3. Push images to Docker Hub
-#   4. Trigger a redeploy on Railway
-#
-# SETUP REQUIRED (GitHub Repository Secrets):
-#   - DOCKER_USERNAME: Your Docker Hub username
-#   - DOCKER_PASSWORD: Your Docker Hub password/access token
-#   - RAILWAY_TOKEN: Your Railway API token (Dashboard → Account → Tokens)
+# GitHub repository secrets (Settings → Secrets and variables → Actions):
+#   - DOCKER_USERNAME          Docker Hub username
+#   - DOCKER_PASSWORD          Docker Hub access token (rotate if ever exposed)
+#   - RAILWAY_TOKEN            Railway account token (Account → Tokens)
+#   - RAILWAY_PROJECT_ID       Project UUID (project settings / URL)
+#   - RAILWAY_SERVICE_ID_BACKEND   Backend service → Settings → Service ID
+#   - RAILWAY_SERVICE_ID_FRONTEND  Frontend service → Settings → Service ID
+#   - RAILWAY_BACKEND_API_URL  Public backend API base for the browser, e.g.
+#                              https://your-backend.up.railway.app/api
+#                              (no trailing slash after "api")
 #
 # ============================================================================
 
@@ -28,7 +25,6 @@ on:
     branches: [main]
 
 jobs:
-  # ── Job 1: Run Backend Tests ──
   test-backend:
     runs-on: ubuntu-latest
     steps:
@@ -40,13 +36,9 @@ jobs:
         with:
           dotnet-version: "8.0.x"
 
-      # TODO: Add a step to run .NET tests
-      # Hint: cd backend && dotnet test
       - name: Run tests
-        run: |
-          echo "TODO: Run backend tests here"
+        run: dotnet test backend/TaskApi.sln --configuration Release
 
-  # ── Job 2: Build and Push Docker Images ──
   build-and-push:
     runs-on: ubuntu-latest
     needs: test-backend
@@ -55,55 +47,34 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      # TODO: Log in to Docker Hub
-      # Hint: Use the docker/login-action@v3 action
-      #   with:
-      #     username: ${{ secrets.DOCKER_USERNAME }}
-      #     password: ${{ secrets.DOCKER_PASSWORD }}
       - name: Login to Docker Hub
-        run: |
-          echo "TODO: Login to Docker Hub"
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKER_USERNAME }}
+          password: ${{ secrets.DOCKER_PASSWORD }}
 
-      # TODO: Build and push the backend Docker image
-      # Hint:
-      #   docker build -t ${{ secrets.DOCKER_USERNAME }}/taskmanager-backend:latest ./backend
-      #   docker push ${{ secrets.DOCKER_USERNAME }}/taskmanager-backend:latest
       - name: Build and push backend image
         run: |
-          echo "TODO: Build and push backend image"
+          docker build -t ${{ secrets.DOCKER_USERNAME }}/taskmanager-backend:latest ./backend
+          docker push ${{ secrets.DOCKER_USERNAME }}/taskmanager-backend:latest
 
-      # TODO: Build and push the frontend Docker image
-      # Hint: Don't forget the --build-arg for REACT_APP_API_URL
-      #   docker build -t ${{ secrets.DOCKER_USERNAME }}/taskmanager-frontend:latest \
-      #     --build-arg REACT_APP_API_URL=/api ./frontend
-      #   docker push ${{ secrets.DOCKER_USERNAME }}/taskmanager-frontend:latest
       - name: Build and push frontend image
         run: |
-          echo "TODO: Build and push frontend image"
+          docker build -t ${{ secrets.DOCKER_USERNAME }}/taskmanager-frontend:latest \
+            --build-arg REACT_APP_API_URL=${{ secrets.RAILWAY_BACKEND_API_URL }} \
+            ./frontend
+          docker push ${{ secrets.DOCKER_USERNAME }}/taskmanager-frontend:latest
 
-  # ── Job 3: Deploy to Railway ──
   deploy:
     runs-on: ubuntu-latest
     needs: build-and-push
     if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    env:
+      RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
+      RAILWAY_PROJECT_ID: ${{ secrets.RAILWAY_PROJECT_ID }}
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      # TODO: Install the Railway CLI and trigger a redeploy
-      # Hint: Install the CLI, then use it to redeploy your services.
-      #   npm install -g @railway/cli
-      #
-      #   The Railway CLI uses the RAILWAY_TOKEN env variable for auth.
-      #   You can trigger a redeploy with:
-      #     railway redeploy --service <SERVICE_ID> --yes
-      #
-      #   You'll need to find your service IDs from the Railway dashboard
-      #   (click a service → Settings → Service ID)
-      #
-      #   Set the RAILWAY_TOKEN as an environment variable:
-      #   env:
-      #     RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
-      - name: Deploy to Railway
+      - name: Install Railway CLI and redeploy services
         run: |
-          echo "TODO: Install Railway CLI and trigger redeploy"
+          npm install -g @railway/cli
+          railway redeploy --service ${{ secrets.RAILWAY_SERVICE_ID_BACKEND }} --yes
+          railway redeploy --service ${{ secrets.RAILWAY_SERVICE_ID_FRONTEND }} --yes
